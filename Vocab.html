@@ -422,6 +422,8 @@
             box-shadow: var(--shadow-2);
             max-width: 500px;
             width: 90%;
+            max-height: 85vh;
+            overflow-y: auto;
         }
         dialog::backdrop {
             background: rgba(0, 0, 0, 0.5);
@@ -474,6 +476,69 @@
         }
         #toast.show { visibility: visible; opacity: 1; }
 
+        /* --- 快捷键设置样式 --- */
+        .shortcut-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 16px;
+            border-bottom: 1px solid var(--md-sys-color-outline-variant);
+            padding-bottom: 12px;
+        }
+        .shortcut-label {
+            font-size: 0.95rem;
+            font-weight: 500;
+            margin-bottom: 4px;
+        }
+        .shortcut-keys {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            justify-content: flex-end;
+            max-width: 60%;
+        }
+        .key-tag {
+            background: var(--md-sys-color-secondary-container);
+            color: var(--md-sys-color-on-surface);
+            padding: 4px 10px;
+            border-radius: 8px;
+            font-size: 0.8rem;
+            font-family: monospace;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            cursor: pointer;
+            user-select: none;
+            border: 1px solid transparent;
+        }
+        .key-tag:hover {
+            border-color: var(--md-sys-color-error);
+            color: var(--md-sys-color-error);
+        }
+        .key-tag span { font-size: 14px; } /* Close icon */
+
+        .add-key-btn {
+            background: var(--md-sys-color-outline-variant);
+            color: var(--md-sys-color-on-surface);
+            border: 1px dashed var(--md-sys-color-outline);
+            padding: 4px 12px;
+            border-radius: 8px;
+            font-size: 0.8rem;
+            cursor: pointer;
+        }
+        .add-key-btn.recording {
+            background-color: var(--md-sys-color-error);
+            color: white;
+            border-style: solid;
+            animation: pulse 1.5s infinite;
+        }
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.6; }
+            100% { opacity: 1; }
+        }
+
     </style>
 </head>
 <body data-theme="light">
@@ -488,7 +553,7 @@
                 <button class="icon-btn" id="theme-toggle" title="切换主题">
                     <span class="material-symbols-rounded">dark_mode</span>
                 </button>
-                <button class="icon-btn" onclick="document.getElementById('settings-dialog').showModal()" title="设置">
+                <button class="icon-btn" onclick="openSettings()" title="设置">
                     <span class="material-symbols-rounded">settings</span>
                 </button>
             </div>
@@ -662,13 +727,22 @@
 
     <dialog id="settings-dialog">
         <h3>⚙️ 设置</h3>
+        
+        <h4 style="margin: 16px 0 8px 0; color: var(--md-sys-color-primary);">基本设置</h4>
         <div class="input-group">
             <label>TTS 语速 (0.5 - 1.5)</label>
             <input type="range" id="tts-rate" min="0.5" max="1.5" step="0.1" value="1.0" oninput="document.getElementById('rate-val').innerText = this.value">
             <span id="rate-val" style="float: right; font-size: 0.8rem;">1.0</span>
         </div>
-        <div style="margin-top: 20px;">
-            <button class="btn btn-text" style="color: var(--md-sys-color-error);" id="reset-data-btn">重置所有数据</button>
+
+        <h4 style="margin: 24px 0 12px 0; color: var(--md-sys-color-primary);">⌨️ 键盘快捷键</h4>
+        <p style="font-size:0.8rem; color: var(--md-sys-color-secondary); margin-top:-8px; margin-bottom:12px;">点击 + 号，然后按下键盘即可绑定。</p>
+        
+        <div id="shortcut-list">
+            </div>
+
+        <div style="margin-top: 32px; border-top: 1px solid var(--md-sys-color-outline-variant); padding-top: 16px;">
+            <button class="btn btn-text" style="color: var(--md-sys-color-error);" id="reset-data-btn">⚠️ 重置所有单词数据</button>
         </div>
         <div class="action-row" style="justify-content: flex-end;">
             <button class="btn btn-primary" onclick="document.getElementById('settings-dialog').close()">完成</button>
@@ -680,6 +754,7 @@
     <script>
         /* --- 核心逻辑 --- */
         const STORAGE_KEY = 'vocab_master_v1';
+        const SHORTCUT_KEY = 'vocab_master_shortcuts';
         let wordList = [];
         let reviewQueue = [];
         let currentWord = null;
@@ -690,19 +765,68 @@
         let synth = window.speechSynthesis;
         let voices = [];
 
+        // 快捷键管理器
+        const Shortcuts = {
+            data: {
+                confirm: ['Space', 'Enter', 'KeyQ'], // 认识 / 下一个 / 确认
+                reject: ['KeyE'],                    // 不认识 / 重来
+                audio: ['KeyR'],                     // 发音
+                master: ['KeyK'],                    // 永久掌握
+                hint: ['KeyH']                       // 拼写提示
+            },
+            labels: {
+                confirm: '认识 / 下一个 (确认)',
+                reject: '不认识 / 忘记了 (重来)',
+                audio: '播放发音',
+                master: '永久掌握 (斩词)',
+                hint: '拼写提示'
+            },
+            
+            init() {
+                const saved = localStorage.getItem(SHORTCUT_KEY);
+                if (saved) {
+                    // 合并保存的设置，防止新版本加了key旧版本报错
+                    this.data = { ...this.data, ...JSON.parse(saved) };
+                }
+            },
+            
+            save() {
+                localStorage.setItem(SHORTCUT_KEY, JSON.stringify(this.data));
+            },
+            
+            add(action, code) {
+                if (!this.data[action].includes(code)) {
+                    this.data[action].push(code);
+                    this.save();
+                    return true;
+                }
+                return false;
+            },
+            
+            remove(action, code) {
+                this.data[action] = this.data[action].filter(c => c !== code);
+                this.save();
+            },
+            
+            getAction(code) {
+                for (const [action, keys] of Object.entries(this.data)) {
+                    if (keys.includes(code)) return action;
+                }
+                return null;
+            }
+        };
+
         // 初始化
         document.addEventListener('DOMContentLoaded', () => {
             loadData();
+            Shortcuts.init(); // 初始化快捷键
             updateDashboard();
             setupEventListeners();
             
             // 初始化 TTS Voice
             if (synth) {
-                // 有些浏览器加载 Voice 是异步的
                 voices = synth.getVoices();
-                synth.onvoiceschanged = () => {
-                    voices = synth.getVoices();
-                };
+                synth.onvoiceschanged = () => { voices = synth.getVoices(); };
             }
             
             const savedTheme = localStorage.getItem('theme') || 'light';
@@ -725,7 +849,6 @@
         function showDashboard() {
             hideAllViews();
             document.getElementById('dashboard-view').classList.remove('hidden');
-            // Reset animation
             document.getElementById('dashboard-view').classList.remove('animate-enter');
             void document.getElementById('dashboard-view').offsetWidth; 
             document.getElementById('dashboard-view').classList.add('animate-enter');
@@ -753,6 +876,11 @@
             renderBank('all');
         }
 
+        function openSettings() {
+            renderShortcutSettings();
+            document.getElementById('settings-dialog').showModal();
+        }
+
         function hideAllViews() {
             ['dashboard-view', 'study-view', 'bank-view'].forEach(id => {
                 document.getElementById(id).classList.add('hidden');
@@ -778,7 +906,7 @@
             } else if (due === 0) {
                 document.getElementById('dash-progress-text').textContent = "今日任务已完成！";
                 btn.innerHTML = '<span class="material-symbols-rounded">check</span> 任务完成';
-                btn.disabled = false; // Allow user to review anyway if they want, or keep disabled
+                btn.disabled = false;
                 btn.style.opacity = 1.0;
             } else {
                 document.getElementById('dash-progress-text').textContent = `待复习: ${due} 个单词`;
@@ -808,7 +936,7 @@
             const p1 = document.getElementById('phase-1');
             p1.classList.remove('hidden');
             p1.classList.remove('animate-enter');
-            void p1.offsetWidth; // Trigger Reflow
+            void p1.offsetWidth; 
             p1.classList.add('animate-enter');
 
             document.getElementById('phase-2').classList.add('hidden');
@@ -820,40 +948,34 @@
         }
 
         function goToPhase2() {
-    const p1 = document.getElementById('phase-1');
-    p1.classList.add('hidden');
-    
-    const p2 = document.getElementById('phase-2');
-    p2.classList.remove('hidden');
-    
-    const isSpelling = document.getElementById('spelling-mode-toggle').checked;
-    
-    if (isSpelling) {
-        // --- 默写模式：上方显示中文释义 ---
-        document.getElementById('quiz-word-prompt').textContent = currentWord.meaning;
-        
-        document.getElementById('quiz-options-container').classList.add('hidden');
-        document.getElementById('spelling-container').classList.remove('hidden');
-        const input = document.getElementById('spelling-input');
-        input.value = '';
-        input.className = 'spelling-input'; 
-        input.focus();
-    } else {
-        // --- 选择题模式：上方显示英文单词 ---
-        document.getElementById('quiz-word-prompt').textContent = currentWord.word;
-        
-        document.getElementById('spelling-container').classList.add('hidden');
-        document.getElementById('quiz-options-container').classList.remove('hidden');
-        generateQuizOptions();
-    }
-}
-        
+            const p1 = document.getElementById('phase-1');
+            p1.classList.add('hidden');
+            
+            const p2 = document.getElementById('phase-2');
+            p2.classList.remove('hidden');
+            
+            const isSpelling = document.getElementById('spelling-mode-toggle').checked;
+            
+            if (isSpelling) {
+                document.getElementById('quiz-word-prompt').textContent = currentWord.meaning;
+                document.getElementById('quiz-options-container').classList.add('hidden');
+                document.getElementById('spelling-container').classList.remove('hidden');
+                const input = document.getElementById('spelling-input');
+                input.value = '';
+                input.className = 'spelling-input'; 
+                input.focus();
+            } else {
+                document.getElementById('quiz-word-prompt').textContent = currentWord.word;
+                document.getElementById('spelling-container').classList.add('hidden');
+                document.getElementById('quiz-options-container').classList.remove('hidden');
+                generateQuizOptions();
+            }
+        }
 
         function generateQuizOptions() {
             const container = document.getElementById('quiz-options-container');
             container.innerHTML = '';
             
-            // 选项是“中文释义”
             let options = [currentWord];
             const others = wordList.filter(w => w.word !== currentWord.word);
             
@@ -865,42 +987,46 @@
             options.sort(() => Math.random() - 0.5);
 
             options.forEach(opt => {
-                const btn = document.createElement('div'); // Using div for complex content
+                const btn = document.createElement('div'); 
                 btn.className = 'quiz-option';
-                // 显示中文意思
                 btn.innerText = opt.meaning; 
                 btn.onclick = () => checkAnswer(opt.word === currentWord.word, btn);
                 container.appendChild(btn);
             });
         }
 
+        function showSpellingHint() {
+            const input = document.getElementById('spelling-input');
+            const len = currentWord.word.length;
+            if (len > 2) {
+                 input.value = currentWord.word[0] + '...' + currentWord.word[len-1];
+            } else {
+                 input.value = currentWord.word[0] + '...';
+            }
+            input.focus();
+        }
+
         function checkSpelling() {
-    const input = document.getElementById('spelling-input');
-    
-    // 清理输入：转小写，去空格，去掉末尾常见的标点（如 . 或 ,）
-    const userVal = input.value.trim().toLowerCase().replace(/[.,!?;]$/, "");
-    // 清理答案：同上
-    const correctAnswer = currentWord.word.toLowerCase().replace(/[.,!?;]$/, "").trim();
-    
-    if (userVal === correctAnswer) {
-        input.classList.remove('wrong');
-        input.classList.add('correct');
-        input.classList.add('animate-pop'); // 绿色弹跳动画
-        
-        speak(currentWord.word); // 拼对了读一遍增加记忆
-        setTimeout(() => handleResult(true), 800);
-    } else {
-        input.classList.add('wrong');
-        input.classList.add('animate-shake'); // 红色晃动动画
-        
-        // 如果拼错了，提示一下正确答案
-        showToast(`拼写错误，正确应为: ${currentWord.word}`);
-        
-        setTimeout(() => {
-            input.classList.remove('animate-shake');
-        }, 400);
-    }
-}
+            const input = document.getElementById('spelling-input');
+            const userVal = input.value.trim().toLowerCase().replace(/[.,!?;]$/, "");
+            const correctAnswer = currentWord.word.toLowerCase().replace(/[.,!?;]$/, "").trim();
+            
+            if (userVal === correctAnswer) {
+                input.classList.remove('wrong');
+                input.classList.add('correct');
+                input.classList.add('animate-pop'); 
+                
+                speak(currentWord.word); 
+                setTimeout(() => handleResult(true), 800);
+            } else {
+                input.classList.add('wrong');
+                input.classList.add('animate-shake'); 
+                showToast(`拼写错误，正确应为: ${currentWord.word}`);
+                setTimeout(() => {
+                    input.classList.remove('animate-shake');
+                }, 400);
+            }
+        }
 
         function checkAnswer(isCorrect, btnElement) {
             if (isCorrect) {
@@ -910,8 +1036,6 @@
             } else {
                 btnElement.classList.add('wrong');
                 btnElement.classList.add('animate-shake');
-                
-                // Highlight correct one
                 const options = document.querySelectorAll('.quiz-option');
                 options.forEach(opt => {
                     if (opt.innerText === currentWord.meaning) {
@@ -923,7 +1047,6 @@
         }
 
         function handleResult(success) {
-            // SRS 算法
             if (success) {
                 currentWord.interval = currentWord.interval === 0 ? 1 : currentWord.interval * 2;
                 currentWord.nextReview = Date.now() + (currentWord.interval * 24 * 60 * 60 * 1000);
@@ -932,7 +1055,6 @@
                 currentWord.nextReview = Date.now(); 
             }
             saveData();
-
             showPhase3(success);
         }
 
@@ -953,33 +1075,20 @@
             if (fromSuccess) {
                  speak(currentWord.word);
             }
-            
-            // Auto focus next button for keyboard users
-            // document.getElementById('p3-next-btn').focus();
         }
 
-        // --- 辅助功能 (TTS Fix) ---
+        // --- 辅助功能 ---
         function speak(text) {
             if (!synth) return;
-            
-            // 必须 Cancel 掉之前的，否则可能会卡死
             synth.cancel();
-
             const u = new SpeechSynthesisUtterance(text);
             u.lang = 'en-US';
             u.rate = ttsRate;
-
-            // 尝试寻找 Google 语音，更自然
             if (voices.length > 0) {
                 const googleVoice = voices.find(v => v.name.includes('Google') && v.lang.includes('en-US'));
-                if (googleVoice) {
-                    u.voice = googleVoice;
-                }
+                if (googleVoice) u.voice = googleVoice;
             }
-
-            // 错误处理，防止静默失败
             u.onerror = (e) => console.error("TTS Error:", e);
-            
             synth.speak(u);
         }
 
@@ -988,6 +1097,149 @@
             t.textContent = msg;
             t.classList.add('show');
             setTimeout(() => t.classList.remove('show'), 3000);
+        }
+
+        // --- 快捷键设置 UI 渲染 ---
+        function renderShortcutSettings() {
+            const list = document.getElementById('shortcut-list');
+            list.innerHTML = '';
+
+            for (const [key, label] of Object.entries(Shortcuts.labels)) {
+                const item = document.createElement('div');
+                item.className = 'shortcut-item';
+                
+                const labelDiv = document.createElement('div');
+                labelDiv.innerHTML = `<div class="shortcut-label">${label}</div>`;
+                
+                const addBtn = document.createElement('button');
+                addBtn.className = 'add-key-btn';
+                addBtn.innerText = '+ 添加';
+                addBtn.onclick = (e) => startRecordingKey(e, key);
+                labelDiv.appendChild(addBtn);
+
+                const keysDiv = document.createElement('div');
+                keysDiv.className = 'shortcut-keys';
+                
+                Shortcuts.data[key].forEach(code => {
+                    const tag = document.createElement('div');
+                    tag.className = 'key-tag';
+                    // 格式化显示：Space -> ⎵ Space, KeyQ -> Q
+                    let display = code.replace('Key', '').replace('Digit', '');
+                    if(code === 'Space') display = 'Space';
+                    if(code === 'Enter') display = 'Enter';
+                    
+                    tag.innerHTML = `${display} <span class="material-symbols-rounded">close</span>`;
+                    tag.onclick = () => {
+                        Shortcuts.remove(key, code);
+                        renderShortcutSettings();
+                    };
+                    keysDiv.appendChild(tag);
+                });
+
+                item.appendChild(labelDiv);
+                item.appendChild(keysDiv);
+                list.appendChild(item);
+            }
+        }
+
+        let isRecording = false;
+        let recordingAction = null;
+        let recordingBtn = null;
+
+        function startRecordingKey(e, action) {
+            if (isRecording) return;
+            isRecording = true;
+            recordingAction = action;
+            recordingBtn = e.target;
+            
+            const originalText = recordingBtn.innerText;
+            recordingBtn.innerText = '请按键...';
+            recordingBtn.classList.add('recording');
+            
+            // 临时的一次性监听器
+            const handler = (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                
+                const code = event.code;
+                Shortcuts.add(recordingAction, code);
+                
+                cleanup();
+                renderShortcutSettings();
+            };
+            
+            const cleanup = () => {
+                isRecording = false;
+                recordingBtn.innerText = originalText;
+                recordingBtn.classList.remove('recording');
+                document.removeEventListener('keydown', handler, true);
+                document.onclick = null;
+            };
+
+            document.addEventListener('keydown', handler, true);
+            
+            // 点击外部取消
+            setTimeout(() => {
+                document.onclick = (ev) => {
+                    if(ev.target !== recordingBtn) cleanup();
+                };
+            }, 100);
+        }
+
+        // --- 核心快捷键处理 ---
+        function handleGlobalKeydown(e) {
+            // 如果正在录制，或者焦点在输入框中（且不是Enter），则忽略全局快捷键
+            if (isRecording) return;
+            const tag = e.target.tagName;
+            if (tag === 'INPUT' || tag === 'TEXTAREA') {
+                // 在输入框中只允许 Enter 触发提交，其他快捷键屏蔽，防止打字冲突
+                if (e.code === 'Enter' && e.target.id === 'spelling-input') return; // 让原生事件处理
+                if (e.code === 'Enter' && e.target.tagName === 'TEXTAREA') return;
+                // 如果是特殊功能键（如 Hint 绑定的键），且用户想用，这里需要权衡。
+                // 简单起见：输入时屏蔽所有自定义快捷键，除了特定的（比如想支持快捷键提示）
+                // 目前逻辑：打字时完全不触发自定义快捷键
+                return;
+            }
+
+            const action = Shortcuts.getAction(e.code);
+            if (!action) return;
+
+            e.preventDefault(); // 阻止默认滚动等行为
+
+            // 获取当前界面状态
+            const studyView = document.getElementById('study-view');
+            if (studyView.classList.contains('hidden')) return; // 不在学习界面不触发
+
+            const p1 = document.getElementById('phase-1');
+            const p2 = document.getElementById('phase-2');
+            const p3 = document.getElementById('phase-3');
+
+            // --- 逻辑分发 ---
+            if (!p1.classList.contains('hidden')) {
+                // 阶段 1：看词
+                if (action === 'confirm') goToPhase2();
+                if (action === 'reject') handleResult(false);
+                if (action === 'audio') speak(currentWord.word);
+                if (action === 'master') document.getElementById('p1-kill-btn').click();
+            
+            } else if (!p2.classList.contains('hidden')) {
+                // 阶段 2：测试/拼写
+                if (action === 'hint') {
+                    // 仅在拼写模式有效
+                    if (!document.getElementById('spelling-container').classList.contains('hidden')) {
+                         document.getElementById('hint-spelling-btn').click();
+                    }
+                }
+                // 注意：选项选择通常太复杂，不建议绑定全局快捷键，除非固定 1/2/3/4
+                // 这里只处理 Hint。Audio 也可以支持
+                if (action === 'audio') speak(currentWord.word);
+
+            } else if (!p3.classList.contains('hidden')) {
+                // 阶段 3：结果
+                if (action === 'confirm') document.getElementById('p3-next-btn').click(); // Next
+                if (action === 'reject') document.getElementById('p3-loop-btn').click(); // Retry
+                if (action === 'audio') speak(currentWord.word);
+            }
         }
 
         // --- 导入功能 ---
@@ -1074,7 +1326,7 @@
             if(confirm("确定删除这个单词吗？")) {
                 wordList = wordList.filter(w => w.id !== id);
                 saveData();
-                const activeFilter = document.querySelector('#bank-view .btn-tonal:focus') ? 'all' : 'all'; // Simplified
+                const activeFilter = document.querySelector('#bank-view .btn-tonal:focus') ? 'all' : 'all'; 
                 renderBank(activeFilter);
             }
         };
@@ -1097,9 +1349,7 @@
                 }
             };
             
-            // 模式切换监听 (实时响应)
             document.getElementById('spelling-mode-toggle').addEventListener('change', () => {
-                // 只有在 Phase 2 (测试阶段) 且没有隐藏时才重新渲染
                 if (!document.getElementById('phase-2').classList.contains('hidden')) {
                     goToPhase2();
                 }
@@ -1110,17 +1360,7 @@
             document.getElementById('spelling-input').addEventListener('keypress', (e) => {
                 if (e.key === 'Enter') checkSpelling();
             });
-            document.getElementById('hint-spelling-btn').onclick = () => {
-                const input = document.getElementById('spelling-input');
-                const len = currentWord.word.length;
-                // 显示首字母和尾字母 (如果够长)
-                if (len > 2) {
-                     input.value = currentWord.word[0] + '...' + currentWord.word[len-1];
-                } else {
-                     input.value = currentWord.word[0] + '...';
-                }
-                input.focus();
-            };
+            document.getElementById('hint-spelling-btn').onclick = showSpellingHint;
 
             // Phase 3
             document.getElementById('p3-speak-btn').onclick = () => speak(currentWord.word);
@@ -1156,16 +1396,8 @@
                 ttsRate = parseFloat(e.target.value);
             };
             
-            // 快捷键
-            document.addEventListener('keydown', (e) => {
-                if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
-                if (e.code === 'Space') {
-                    e.preventDefault(); 
-                    if (!document.getElementById('phase-3').classList.contains('hidden')) {
-                        document.getElementById('p3-next-btn').click();
-                    }
-                }
-            });
+            // 全局快捷键绑定
+            document.addEventListener('keydown', handleGlobalKeydown);
         }
     </script>
 </body>
