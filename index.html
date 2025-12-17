@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>我的个人导航站</title>
+  <link rel="manifest" href="manifest.json">
+  <style>
+    :root {
+      --primary-gradient: linear-gradient(135deg, #4285F4, #34A853); /* Google Blue to Green */
+      --glass-bg: rgba(20, 20, 20, 0.75);
+      --card-bg: rgba(255, 255, 255, 0.1);
+      --text-color: #ffffff;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      outline: none;
+    }
+
+    body {
+      font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      /* 换了一个高质量的抽象背景，更符合工具箱的感觉 */
+      background-image: url('https://images.unsplash.com/photo-1451187580459-43490279c0fa?q=80&w=2072&auto=format&fit=crop');
+      background-size: cover;
+      background-position: center;
+      background-repeat: no-repeat;
+      background-attachment: fixed;
+      color: var(--text-color);
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start; /* 改为从顶部开始布局，防止内容过多遮挡 */
+      padding-top: 5vh;
+      padding-bottom: 5vh;
+    }
+
+    .container {
+      background: var(--glass-bg);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border-radius: 24px;
+      padding: 3rem;
+      max-width: 1000px;
+      width: 95%;
+      box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      transition: all 0.3s ease;
+    }
+
+    /* Google 风格搜索标题 */
+    header {
+      text-align: center;
+      margin-bottom: 2.5rem;
+    }
+
+    h1 {
+      font-size: 2.5rem;
+      margin-bottom: 0.5rem;
+      background: linear-gradient(to right, #4285F4, #EA4335, #FBBC05, #34A853);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+      letter-spacing: -1px;
+    }
+
+    /* Google 搜索框样式 */
+    .search-box {
+      margin: 0 auto 2rem auto;
+      max-width: 600px;
+      position: relative;
+    }
+
+    .search-box input {
+      width: 100%;
+      padding: 14px 24px;
+      border-radius: 30px;
+      border: 1px solid rgba(255,255,255,0.2);
+      background: rgba(255,255,255,0.1);
+      color: white;
+      font-size: 1.1rem;
+      transition: all 0.3s;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    }
+
+    .search-box input:focus {
+      background: rgba(255,255,255,0.2);
+      box-shadow: 0 4px 12px rgba(66, 133, 244, 0.3);
+      border-color: #4285F4;
+    }
+
+    /* 添加新网站的控制台 */
+    .admin-panel {
+      background: rgba(0, 0, 0, 0.3);
+      padding: 1.5rem;
+      border-radius: 16px;
+      margin-bottom: 2rem;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      justify-content: center;
+      align-items: center;
+      border: 1px dashed rgba(255,255,255,0.2);
+    }
+
+    .input-group input {
+      padding: 10px 15px;
+      border-radius: 8px;
+      border: 1px solid #444;
+      background: #222;
+      color: #fff;
+      font-size: 0.95rem;
+      min-width: 200px;
+    }
+
+    .btn-add {
+      padding: 10px 20px;
+      border-radius: 8px;
+      border: none;
+      background: #4285F4;
+      color: white;
+      font-weight: bold;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    .btn-add:hover {
+      background: #3367D6;
+    }
+
+    /* 网站卡片区域 */
+    .platforms {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+      gap: 1.5rem;
+      margin-top: 1rem;
+    }
+
+    .card {
+      background: var(--card-bg);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 16px;
+      padding: 1.5rem;
+      text-align: center;
+      transition: transform 0.3s, box-shadow 0.3s, background 0.3s;
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      height: 140px;
+    }
+
+    .card:hover {
+      transform: translateY(-5px);
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
+      background: rgba(255, 255, 255, 0.15);
+      border-color: rgba(255, 255, 255, 0.3);
+    }
+
+    .card h3 {
+      font-size: 1.1rem;
+      margin-bottom: 0.5rem;
+      font-weight: 500;
+      color: #eee;
+      word-break: break-all;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    .card a {
+      display: block;
+      padding: 0.5rem;
+      margin-top: auto;
+      background: rgba(255,255,255,0.1);
+      color: #fff;
+      text-decoration: none;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      transition: background 0.3s;
+    }
+
+    .card a:hover {
+      background: var(--primary-gradient);
+    }
+
+    /* 删除按钮 */
+    .delete-btn {
+      position: absolute;
+      top: 5px;
+      right: 5px;
+      width: 24px;
+      height: 24px;
+      background: rgba(255, 0, 0, 0.6);
+      color: white;
+      border: none;
+      border-radius: 50%;
+      cursor: pointer;
+      font-size: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 0; /* 默认隐藏 */
+      transition: opacity 0.2s;
+    }
+
+    .card:hover .delete-btn {
+      opacity: 1; /* 悬停显示 */
+    }
+
+    .delete-btn:hover {
+      background: red;
+    }
+
+    footer {
+      margin-top: 3rem;
+      text-align: center;
+      color: #888;
+      font-size: 0.8rem;
+    }
+
+    /* 响应式 */
+    @media (max-width: 768px) {
+      .container { padding: 1.5rem; }
+      .admin-panel { flex-direction: column; align-items: stretch; }
+      .input-group input { width: 100%; }
+      .platforms { grid-template-columns: repeat(2, 1fr); }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <header>
+      <h1>My Workspace</h1>
+      <p style="color: #aaa;">快捷启动 & 工具箱</p>
+    </header>
+
+    <div class="search-box">
+      <form action="https://www.google.com/search" method="get" target="_blank">
+        <input type="text" name="q" placeholder="在 Google 上搜索..." autocomplete="off">
+      </form>
+    </div>
+
+    <div class="admin-panel">
+      <div class="input-group">
+        <input type="text" id="siteName" placeholder="网站名称 (例如: B站)">
+      </div>
+      <div class="input-group">
+        <input type="text" id="siteUrl" placeholder="网址 (例如: bilibili.com)">
+      </div>
+      <button class="btn-add" onclick="addSite()">+ 添加到工具箱</button>
+    </div>
+
+    <div class="platforms" id="linkContainer">
+      </div>
+
+    <footer>
+      <p>© 2025 个人专属导航站 | 数据存储在本地浏览器中</p>
+    </footer>
+  </div>
+
+  <script>
+    // 1. 初始化：从 LocalStorage 读取数据
+    // 如果没有数据，就放几个默认的
+  const defaultLinks = [
+    { name: "Poem", url: "https://YunfanShi.github.io/Poem.html" }, 
+    { name: "Vocab", url: "https://YunfanShi.github.io/VocabJ.html" },
+    { name: "Auxiliary Data Network", url: "https://YunfanShi.github.io/ADN.html" },
+    { name: "LexiconLab", url: "https://YunfanShi.github.io/LexiconLab.html" },
+    { name: "BF6", url: "https://YunfanShi.github.io/bf6.html" },
+];
+
+    let links = JSON.parse(localStorage.getItem('myTools')) || defaultLinks;
+
+    const container = document.getElementById('linkContainer');
+    const nameInput = document.getElementById('siteName');
+    const urlInput = document.getElementById('siteUrl');
+
+    // 2. 渲染函数：把数据变成 HTML 卡片
+    function renderLinks() {
+      container.innerHTML = ''; // 清空当前列表
+      links.forEach((link, index) => {
+        const card = document.createElement('div');
+        card.className = 'card';
+        card.innerHTML = `
+          <button class="delete-btn" onclick="deleteLink(${index})" title="删除">×</button>
+          <h3>${link.name}</h3>
+          <a href="${link.url}" target="_blank">立即访问</a>
+        `;
+        container.appendChild(card);
+      });
+    }
+
+    // 3. 添加网站函数
+    function addSite() {
+      const name = nameInput.value.trim();
+      let url = urlInput.value.trim();
+
+      if (!name || !url) {
+        alert("请输入网站名称和网址！");
+        return;
+      }
+
+      // 自动补全 http:// 防止跳转错误
+      if (!url.startsWith('http://') && !url.startsWith('https://')) {
+        url = 'https://' + url;
+      }
+
+      links.push({ name, url });
+      saveAndRender();
+      
+      // 清空输入框
+      nameInput.value = '';
+      urlInput.value = '';
+    }
+
+    // 4. 删除网站函数
+    function deleteLink(index) {
+      if(confirm('确定要删除这个书签吗？')) {
+        links.splice(index, 1); // 从数组中删除
+        saveAndRender();
+      }
+    }
+
+    // 5. 保存并重新渲染
+    function saveAndRender() {
+      localStorage.setItem('myTools', JSON.stringify(links)); // 保存到浏览器
+      renderLinks();
+    }
+
+    // 页面加载时执行一次渲染
+    renderLinks();
+
+    // 支持按回车键添加
+    urlInput.addEventListener("keypress", function(event) {
+      if (event.key === "Enter") {
+        addSite();
+      }
+    });
+  </script>
+</body>
+</html>

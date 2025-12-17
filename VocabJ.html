@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vocab Flow</title>
+    <style>
+        :root {
+            --primary-color: #007aff;
+            --success-color: #2ecc71;
+            --bg-color: #f9fbfd;
+            --text-main: #2c3e50;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+            background-color: var(--bg-color);
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            color: #333;
+        }
+
+        .container {
+            text-align: center;
+            padding: 32px;
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05);
+            max-width: 450px;
+            width: 90%;
+            transition: transform 0.3s ease;
+        }
+
+        .logo-icon {
+            font-size: 48px;
+            margin-bottom: 16px;
+            display: inline-block;
+        }
+
+        h2 {
+            margin: 0 0 8px;
+            color: var(--text-main);
+            font-size: 24px;
+            font-weight: 700;
+        }
+
+        p {
+            color: #666;
+            font-size: 15px;
+            margin-bottom: 24px;
+        }
+
+        .status-area {
+            padding: 16px;
+            background: #f8f9fa;
+            border-radius: 12px;
+            margin-bottom: 24px;
+            border: 1px solid #eee;
+        }
+
+        .device-info {
+            font-weight: 600;
+            color: var(--primary-color);
+        }
+
+        .secondary-link {
+            font-size: 14px;
+            color: #999;
+            text-decoration: none;
+        }
+
+        .secondary-link:hover {
+            text-decoration: underline;
+        }
+
+        .countdown-text {
+            color: #888;
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        #timer-num {
+            color: var(--primary-color);
+            font-weight: bold;
+            margin: 0 2px;
+        }
+
+        /* 动画 */
+        .loading-dots::after {
+            content: '.';
+            animation: dots 1.5s steps(5, end) infinite;
+        }
+
+        @keyframes dots {
+            0%, 20% { content: '.'; }
+            40% { content: '..'; }
+            60% { content: '...'; }
+            80%, 100% { content: ''; }
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="container">
+        <div class="logo-icon">📖</div>
+        <h2>Vocab Flow</h2>
+        <p>智能识别设备，为您开启最佳学习体验</p>
+
+        <div class="status-area">
+            检测到当前设备：<br>
+            <span id="device-type" class="device-info">识别中...</span>
+        </div>
+
+        <div id="action-area">
+            <div class="countdown-text">
+                将在 <span id="timer-num">5</span> 秒后自动跳转<span class="loading-dots"></span>
+            </div>
+        </div>
+
+        <div style="margin-top: 30px; border-top: 1px dashed #eee; padding-top: 20px;">
+            <a href="#" id="manual-switch" class="secondary-link">手动切换至其他版本</a>
+        </div>
+    </div>
+
+    <script>
+        // --- 配置区域 ---
+        const PC_URL = "https://YunfanShi.github.io/Vocab.html";         
+        const PHONE_URL = "https://YunfanShi.github.io/VocabM.html"; 
+
+        function detectDevice() {
+            const ua = navigator.userAgent;
+            return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(ua) ? 'Mobile' : 'PC';
+        }
+
+        function startRedirect() {
+            const device = detectDevice();
+            const deviceSpan = document.getElementById('device-type');
+            const manualLink = document.getElementById('manual-switch');
+            const timerSpan = document.getElementById('timer-num');
+            
+            let targetUrl = "";
+            let timeLeft = 5; // 这里设置倒计时的秒数
+
+            // 1. 识别设备并设置初始 UI
+            if (device === 'Mobile') {
+                deviceSpan.textContent = "📱 移动端 (手机/平板)";
+                manualLink.textContent = "强制访问电脑版";
+                manualLink.href = PC_URL;
+                targetUrl = PHONE_URL;
+            } else {
+                deviceSpan.textContent = "💻 桌面端 (PC/Mac)";
+                manualLink.textContent = "切换到手机预览版";
+                manualLink.href = PHONE_URL;
+                targetUrl = PC_URL;
+            }
+
+            // 2. 启动倒计时器
+            const countdown = setInterval(() => {
+                timeLeft--;
+                timerSpan.textContent = timeLeft; // 更新页面上的数字
+                
+                if (timeLeft <= 0) {
+                    clearInterval(countdown); // 停止计时器
+                    window.location.href = targetUrl; // 跳转
+                }
+            }, 1000); // 每 1000 毫秒（1秒）执行一次
+        }
+
+        // 初始化
+        document.addEventListener('DOMContentLoaded', startRedirect);
+    </script>
+</body>
+
+</html>
